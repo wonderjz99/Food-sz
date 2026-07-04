@@ -1,0 +1,40 @@
+{
+  "name": "food-sz-map",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "data:parse": "node --import tsx scripts/parse-xlsx.ts",
+    "data:geocode": "node --import tsx scripts/geocode-tencent.ts",
+    "data:geocode-amap": "node --import tsx scripts/geocode-amap.ts",
+    "data:download-all": "node --import tsx scripts/download-all-ratings.ts",
+    "data:filter-ratings": "node --import tsx scripts/filter-ratings.ts",
+    "data:parse-ratings": "node --import tsx scripts/parse-ratings.ts",
+    "data:geocode-daily": "node --import tsx scripts/geocode-daily.ts",
+    "data:build": "node --import tsx scripts/build-data.ts",
+    "data:validate": "node --import tsx scripts/validate-data.ts",
+    "data:status": "node --import tsx scripts/geocode-status.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vite": "6.4.3",
+    "vitest": "2.1.9"
+  }
+}
