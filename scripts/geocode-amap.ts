@@ -28,6 +28,7 @@ type AmapGeocodeResponse = {
 const ENDPOINT_URL = "https://restapi.amap.com/v3/geocode/geo";
 const DEFAULT_DELAY_MS = 200;
 const DEFAULT_RETRIES = 2;
+const DEFAULT_CONCURRENCY = 1;
 
 // Infocodes that mean "don't bother retrying, the run is blocked"
 const FATAL_INFOCODES = new Set([
@@ -40,6 +41,7 @@ type GeocodeOptions = {
   limit: number;
   delayMs: number;
   retries: number;
+  concurrency: number;
   key?: string;
 };
 
@@ -215,6 +217,7 @@ export async function geocodeAmap(
     limit = Number.POSITIVE_INFINITY,
     delayMs = DEFAULT_DELAY_MS,
     retries = DEFAULT_RETRIES,
+    concurrency = DEFAULT_CONCURRENCY,
     key: keyOverride,
   } = options;
   loadEnvFile();
@@ -233,55 +236,56 @@ export async function geocodeAmap(
   let ok = Object.values(cache).filter((record) => record.status === "ok")
     .length;
 
-  for (const unit of units) {
-    if (cache[unit.id]?.status === "ok") {
-      continue;
+  // Build queue of units that need geocoding
+  const queue = units.filter((u) => cache[u.id]?.status !== "ok");
+
+  // Process the queue in concurrent batches
+  for (let qi = 0; qi < queue.length; qi += concurrency) {
+    const batch = queue.slice(qi, qi + concurrency);
+
+    const results = await Promise.all(
+      batch.map(async (unit) => {
+        const queryAddress = buildGeocodeAddress(unit);
+        const reusable = findReusableGeocodeRecord(cache, queryAddress);
+        if (reusable) {
+          return { unit, record: { ...reusable, unitId: unit.id, address: unit.address, queryAddress, updatedAt: new Date().toISOString() }, reused: true };
+        }
+        const record = await geocodeWithRetry(unit, key, retries);
+        return { unit, record, reused: false };
+      })
+    );
+
+    // Write results
+    for (const { unit, record } of results) {
+      cache[unit.id] = record;
+      processed += 1;
+      ok += record.status === "ok" ? 1 : 0;
     }
 
-    const queryAddress = buildGeocodeAddress(unit);
-    const reusable = findReusableGeocodeRecord(cache, queryAddress);
-    if (reusable) {
-      cache[unit.id] = {
-        ...reusable,
-        unitId: unit.id,
-        address: unit.address,
-        queryAddress,
-        updatedAt: new Date().toISOString(),
-      };
-      ok += 1;
-      continue;
-    }
-
-    cache[unit.id] = await geocodeWithRetry(unit, key, retries);
-    processed += 1;
-    ok += cache[unit.id].status === "ok" ? 1 : 0;
-
-    const raw = cache[unit.id].raw as AmapGeocodeResponse | undefined;
-    if (raw && FATAL_INFOCODES.has(raw.infocode)) {
-      writeJsonFile("data/geocode-cache.json", cache);
-      writeReviewCsv(units, cache);
-      const hints: Record<string, string> = {
-        "10001": "Amap reports the key is invalid or not yet activated. Check the key value and ensure the WebService API is enabled for this key in the Amap console (https://console.amap.com/dev/key/app). New keys may take up to an hour to activate.",
-        "10003": "Amap reports this key has reached its daily request quota. Wait for the quota to reset or increase the quota in the Amap console.",
-        "20000": "Amap reports no API quota allocated to this key. Go to the Amap console and assign quota to the WebService Geocoding API for this key.",
-      };
-      const hint =
-        hints[raw.infocode] ??
-        `Amap returned infocode ${raw.infocode}: ${raw.info}`;
-      throw new Error(
-        `Amap geocoder stopped at ${unit.id}: ${raw.info}. ${hint}`
-      );
+    // Check for fatal errors
+    for (const { unit } of results) {
+      const raw = cache[unit.id].raw as AmapGeocodeResponse | undefined;
+      if (raw && FATAL_INFOCODES.has(raw.infocode)) {
+        writeJsonFile("data/geocode-cache.json", cache);
+        writeReviewCsv(units, cache);
+        const hints: Record<string, string> = {
+          "10001": "Amap reports the key is invalid or not yet activated.",
+          "10003": "Amap reports this key has reached its daily request quota.",
+          "20000": "Amap reports no API quota allocated to this key.",
+        };
+        const hint = hints[raw.infocode] ?? `Amap returned infocode ${raw.infocode}: ${raw.info}`;
+        throw new Error(`Amap geocoder stopped at ${unit.id}: ${raw.info}. ${hint}`);
+      }
     }
 
     if (processed % 25 === 0) {
       writeJsonFile("data/geocode-cache.json", cache);
       writeReviewCsv(units, cache);
-      console.log(
-        `Geocoded ${processed} this run; ${ok}/${units.length} cached ok`
-      );
+      console.log(`Geocoded ${processed} this run; ${ok}/${units.length} cached ok`);
     }
 
     if (processed >= limit) {
+      // Trim excess from last concurrent batch
       break;
     }
 

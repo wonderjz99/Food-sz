@@ -3,6 +3,7 @@ import { applyLocalKeysToProcessEnv } from "./local-keys";
 
 const DAILY_LIMIT = 5000;
 const DELAY_MS = 200;
+const CONCURRENCY = 5;
 
 async function main(): Promise<void> {
   applyLocalKeysToProcessEnv();
@@ -26,7 +27,7 @@ async function main(): Promise<void> {
     console.log(`--- Key ${i + 1}/${keys.length} ---`);
     const start = Date.now();
     try {
-      await geocodeAmap({ limit: DAILY_LIMIT, delayMs: DELAY_MS, retries: 2, key: keys[i] });
+      await geocodeAmap({ limit: DAILY_LIMIT, delayMs: DELAY_MS, retries: 2, concurrency: CONCURRENCY, key: keys[i] });
     } catch (err) {
       console.error(`Key ${i + 1} 失败:`, err instanceof Error ? err.message : String(err));
     }
