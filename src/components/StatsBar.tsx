@@ -11,7 +11,7 @@ export function StatsBar({ summary, filteredUnits }: StatsBarProps) {
   const bTotal = filteredUnits.filter((u) => u.ratingLevel === "B").length;
   const cTotal = filteredUnits.filter((u) => u.ratingLevel === "C").length;
   const selectedRealLocations = filteredUnits.filter((unit) => unit.location && unit.geocodeStatus === "ok").length;
-  const latestYear = Math.max(...filteredUnits.map((unit) => unit.ratingYear), 0);
+  const latestYear = filteredUnits.reduce((max, unit) => Math.max(max, unit.ratingYear), 0);
 
   return (
     <section className="stats-bar" aria-label="地图统计">
