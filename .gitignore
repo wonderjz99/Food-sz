@@ -1,14 +1,1 @@
-node_modules/
-.pnpm-store/
-dist/
-tsconfig.tsbuildinfo
-.env
-.env.local
-key.txt
-data/
-public/
-*.xlsx
 .DS_Store
-coverage/
-playwright-report/
-test-results/
